@@ -1,0 +1,86 @@
+---
+title: "Practical Machine Learning Assignment 1"
+author: "Bhargav"
+date: "Sep 2015"
+output:
+  html_document:
+    highlight: tango
+    theme: spacelab
+  pdf_document:
+    highlight: zenburn
+---
+
+**Data**:
+Download and load the training & testing dataset
+A 70%-30% training and testing partitions are created to test the accuracy of the algorithm
+```{r}
+setwd("/Users/bhargav/Desktop/Practical Machine Learning/Data/")
+
+training_data <- read.csv("pml-training.csv", header = TRUE, na.strings = c(" ", "NA", "#DIV/0!","NULL"))
+
+intrain <- createDataPartition(training_data$classe,p=0.7,list = FALSE)
+training <- training_data[intrain,]; testing <- training_data[-intrain,]
+
+testing_final <- read.csv("pml-testing.csv", header = TRUE, na.strings = c(" ", "NA", "#DIV/0!","NULL"))
+```
+
+**Data processing & Manipulation**:
+Removing features with majority values as NA
+
+```{r}
+colSums(is.na(training))
+training1 <- training[ , colSums(is.na(training)) < 13000]
+dim(training1)
+```
+
+Removing features which will not be used in the prediction algorithm
+
+```{r}
+remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+training2 <- training1[, -which(names(training1) %in% remove)]
+dim(training2)
+```
+
+Removing features which have very low variance
+```{r}
+library(caret)
+nsv <- nearZeroVar(training2,saveMetrics = TRUE)
+#No variable has near zero variance
+```
+
+Checking for correlation between the variables
+
+```{r}
+M <- abs(cor(training2[,-53]))
+diag(M) <- 0
+removecor = findCorrelation(M, cutoff = .80, verbose = TRUE)
+training3 = training2[,-removecor]
+dim(training3)
+```
+
+**Algorithm used**  :
+1. Classification using decision trees
+
+```{r}
+library(caret)
+modelfit <- train(classe ~ ., method = "rpart", data = training3)
+print(modelfit$finalModel)
+library(rattle)
+fancyRpartPlot(modelfit$finalModel)
+```
+
+*Accuracy of the model*
+```{r}
+pred <- predict(modelfit,testing)
+a <- table(testing$classe,pred)
+acc <- sum(diag(a)) / sum(as.vector(a))
+acc
+```
+Which is pretty low
+
+
+2. Random forest to improve the performance
+
+```{r}
+set.seed(123)
+modelfitRF <- train(classe ~ ., method = "rf", prox = TRUE, data = training3, importance = FALSE)
